@@ -476,6 +476,16 @@ where
                 Located::ModuleStatement(Definition::ModuleConstant(constant)) => {
                     Some(hover_for_module_constant(constant, lines))
                 }
+                Located::ModuleStatement(Definition::Import(import)) => this
+                    .compiler
+                    .modules
+                    .get(&import.module)
+                    .map(|module| Hover {
+                        contents: HoverContents::Scalar(MarkedString::from_markdown(
+                            module.ast.documentation.join("\n").into(),
+                        )),
+                        range: Some(src_span_to_lsp_range(import.location, &lines)),
+                    }),
                 Located::ModuleStatement(_) => None,
                 Located::UnqualifiedImport(UnqualifiedImport {
                     name,

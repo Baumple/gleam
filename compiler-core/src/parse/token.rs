@@ -11,6 +11,7 @@ pub enum Token {
     Float { value: EcoString },
     String { value: EcoString },
     CommentDoc { content: String },
+    CommentModule { content: String },
     // Groupings
     LeftParen,   // (
     RightParen,  // )
@@ -61,7 +62,6 @@ pub enum Token {
     EndOfFile,
     // Extra
     CommentNormal,
-    CommentModule,
     NewLine,
     // Keywords (alphabetically):
     As,
@@ -146,6 +146,7 @@ impl Token {
             | Token::Float { .. }
             | Token::String { .. }
             | Token::CommentDoc { .. }
+            | Token::CommentModule { .. }
             | Token::LeftParen
             | Token::RightParen
             | Token::LeftSquare
@@ -190,7 +191,6 @@ impl Token {
             | Token::At
             | Token::EndOfFile
             | Token::CommentNormal
-            | Token::CommentModule
             | Token::NewLine => false,
         }
     }
@@ -215,7 +215,7 @@ impl fmt::Display for Token {
             Token::Colon => ":",
             Token::Comma => ",",
             Token::CommentDoc { .. } => "///",
-            Token::CommentModule => "////",
+            Token::CommentModule { .. } => "////",
             Token::CommentNormal => "//",
             Token::Const => "const",
             Token::Delegate => "delegate",

@@ -718,7 +718,7 @@ where
         let token = match kind {
             Kind::Comment => Token::CommentNormal,
             Kind::Doc => Token::CommentDoc { content },
-            Kind::ModuleDoc => Token::CommentModule,
+            Kind::ModuleDoc => Token::CommentModule { content },
         };
         (start_pos, token, end_pos)
     }

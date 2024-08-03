@@ -211,6 +211,7 @@ pub struct Parser<T: Iterator<Item = LexResult>> {
     tok0: Option<Spanned>,
     tok1: Option<Spanned>,
     extra: ModuleExtra,
+    mod_comments: VecDeque<EcoString>,
     doc_comments: VecDeque<(u32, String)>,
 }
 impl<T> Parser<T>
@@ -225,6 +226,7 @@ where
             tok0: None,
             tok1: None,
             extra: ModuleExtra::new(),
+            mod_comments: VecDeque::new(),
             doc_comments: VecDeque::new(),
         };
         parser.advance();
@@ -233,14 +235,20 @@ where
     }
 
     fn parse_module(&mut self) -> Result<Parsed, ParseError> {
+        let mut documentation = vec![];
+        while let Some(doc) = self.mod_comments.pop_front() {
+            documentation.push(doc);
+        }
+
         let definitions = Parser::series_of(self, &Parser::parse_definition, None);
         let definitions = self.ensure_no_errors_or_remaining_input(definitions)?;
         let module = Module {
             name: "".into(),
-            documentation: vec![],
+            documentation,
             type_info: (),
             definitions,
         };
+
         Ok(Parsed {
             module,
             extra: Default::default(),
@@ -314,7 +322,6 @@ where
                 self.advance();
                 self.parse_module_const(start, true, &attributes)
             }
-
             // Function
             (Some((start, Token::Fn, _)), _) => {
                 self.advance();
@@ -2379,7 +2386,6 @@ where
                 break;
             }
         }
-
         let (_, documentation) = self.take_documentation(start).unzip();
 
         // Gather imports
@@ -3305,8 +3311,9 @@ where
                     self.doc_comments.push_back((start, content));
                     previous_newline = None;
                 }
-                Some(Ok((start, Token::CommentModule, end))) => {
+                Some(Ok((start, Token::CommentModule { content }, end))) => {
                     self.extra.module_comments.push(SrcSpan { start, end });
+                    self.mod_comments.push_back(content.into());
                     previous_newline = None;
                 }
                 Some(Ok((start, Token::NewLine, _))) => {
@@ -3342,7 +3349,6 @@ where
         self.tok1 = nxt.take();
         t
     }
-
     fn take_documentation(&mut self, until: u32) -> Option<(u32, EcoString)> {
         let mut content = String::new();
         let mut doc_start = u32::MAX;
@@ -3353,6 +3359,7 @@ where
             if *start >= until {
                 break;
             }
+
             if self.extra.has_comment_between(*start, until) {
                 // We ignore doc comments that come before a regular comment.
                 _ = self.doc_comments.pop_front();
