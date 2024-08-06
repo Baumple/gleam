@@ -476,16 +476,15 @@ where
                 Located::ModuleStatement(Definition::ModuleConstant(constant)) => {
                     Some(hover_for_module_constant(constant, lines))
                 }
-                Located::ModuleStatement(Definition::Import(import)) => this
-                    .compiler
-                    .modules
-                    .get(&import.module)
-                    .map(|module| Hover {
-                        contents: HoverContents::Scalar(MarkedString::from_markdown(
-                            module.ast.documentation.join("\n").into(),
-                        )),
-                        range: Some(src_span_to_lsp_range(import.location, &lines)),
-                    }),
+                Located::ModuleStatement(Definition::Import(import)) => {
+                    let maybe_module = this.compiler.modules.get(&import.module);
+                    Some(hover_for_module_import(
+                        import,
+                        maybe_module,
+                        &this.hex_deps,
+                        lines,
+                    ))
+                }
                 Located::ModuleStatement(_) => None,
                 Located::UnqualifiedImport(UnqualifiedImport {
                     name,
@@ -749,6 +748,31 @@ fn custom_type_symbol(type_: &CustomType<Arc<Type>>, line_numbers: &LineNumbers)
     }
 }
 
+fn hover_for_module_import(
+    import: &crate::ast::Import<EcoString>,
+    local_module: Option<&Module>,
+    hex_deps: &std::collections::HashSet<EcoString>,
+    line_numbers: LineNumbers,
+) -> Hover {
+    let module_name = &import.module;
+    let documentation = local_module
+        .map(|module| module.ast.documentation.join("\n"))
+        .or_else(|| get_hexdocs_link_section_module(module_name, &import.package, hex_deps))
+        .unwrap_or_default();
+    let contents = format!(
+        "```gleam
+module {module_name}
+```
+{documentation}
+"
+    );
+
+    Hover {
+        contents: HoverContents::Scalar(MarkedString::from_markdown(contents)),
+        range: Some(src_span_to_lsp_range(import.location, &line_numbers)),
+    }
+}
+
 fn hover_for_pattern(pattern: &TypedPattern, line_numbers: LineNumbers) -> Hover {
     let documentation = pattern.get_documentation().unwrap_or_default();
 
@@ -780,6 +804,7 @@ fn hover_for_function_head(fun: &TypedFunction, line_numbers: LineNumbers) -> Ho
         .as_ref()
         .map(|(_, doc)| doc)
         .unwrap_or(&empty_str);
+
     let function_type = get_function_type(fun);
     let formatted_type = Printer::new().pretty_print(&function_type, 0);
     let contents = format!(
@@ -1081,6 +1106,21 @@ fn get_hexdocs_link_section(
     })?;
 
     Some(format_hexdocs_link_section(package_name, module_name, name))
+}
+
+fn get_hexdocs_link_section_module(
+    module_name: &str,
+    package_name: &str,
+    hex_deps: &std::collections::HashSet<EcoString>,
+) -> Option<String> {
+    if hex_deps.contains(package_name) {
+        return Some(format_hexdocs_link_section(
+            package_name,
+            module_name,
+            module_name,
+        ));
+    }
+    None
 }
 
 /// Converts the source start position of a documentation comment's contents into
